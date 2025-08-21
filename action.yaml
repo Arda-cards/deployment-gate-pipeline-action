@@ -1,9 +1,52 @@
 ---
-name: "..."
-description: "..."
+name: deployment-gate-pipeline-action
+description: "Grant a chart version deployment for a purpose"
 inputs:
-  ...
-outputs:
-  ...
+  chart_version:
+    description: "The version to deploy"
+    required: true
+  chart_name:
+    description: "The name of the chart to deploy"
+    required: true
+  github_token:
+    description: "A github token that permits calling rerun-failed-jobs."
+    required: true
+  locator_url:
+    description: "The URL of properties file that defines aws_region, aws_role, cluster_name, deployment_gate."
+    required: true
+  locator_url_bearer:
+    description: "A authentication bearer with read access to locator_url."
+    required: false
+    default: ""
+  locator_url_token:
+    description: "An authentication token with read access to locator_url."
+    required: false
+    default: ""
+  purpose:
+    description: "The purpose in the deployment pipeline (dev, prod, ...)"
+    required: true
 runs:
-  ...
+  using: composite
+  steps:
+    - id: purpose_config
+      uses: Arda-cards/purpose-configuration-action@v1
+      with:
+        locator_url: "${{ inputs.locator_url}}"
+        locator_url_bearer: "${{ inputs.locator_url_bearer }}"
+        locator_url_token: "${{ inputs.locator_url_token }}"
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: "${{ steps.purpose_config.outputs.aws_role }}"
+        aws-region: "${{ steps.purpose_config.outputs.aws_region }}"
+        role-duration-seconds: 900
+    - name: "Process request to deploy ${{ inputs.chart_version }} for ${{ inputs.purpose }}"
+      uses: Arda-cards/deployment-gate-action@v1
+      with:
+        aws_region: "${{ steps.purpose_config.outputs.aws_region }}"
+        chart_name: "${{ inputs.chart_name }}"
+        chart_version: "${{ inputs.chart_version }}"
+        cluster_name: "${{ steps.purpose_config.outputs.cluster_name }}"
+        deployment_gate: "${{ steps.purpose_config.outputs.deployment_gate }}"
+        github_token: "${{ inputs.github_token }}"
+        mode: "grant"
+        purpose: "${{ inputs.purpose }}"
